@@ -1,6 +1,13 @@
 # Ignore everything
 /*
 
+# Allow only these files/folders
+!Utils.py
+!run_demo.py
+!estimater.py
+!datareader.py
+!learning/
+
 # But not these folders
 !/FoundationPose/
 !/GroundedSAM_demo/
