@@ -2,11 +2,12 @@
 /*
 
 # Allow only these files/folders
-!Utils.py
-!run_demo.py
-!estimater.py
+# !Utils.py
+# !run_demo.py
+# !estimater.py
 !datareader.py
-!learning/
+# !learning/
+# !multi_thread_multi_object.py
 
 # But not these folders
 !/FoundationPose/
