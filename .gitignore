@@ -7,6 +7,7 @@
 # !estimater.py
 !datareader.py
 # !learning/
+!py_srvcli/
 # !multi_thread_multi_object.py
 
 # But not these folders
