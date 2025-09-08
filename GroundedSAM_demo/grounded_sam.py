@@ -427,3 +427,69 @@ class GroundedSAM:
             detections = self.postprocess_resize(detections, orig_size)  # {..., "masks": B' x H x W, ...}
 
         return detections  # {"boxes": B' x 4 (as xyxy), "masks": B' x H x W, "boxes_scores": B', "masks_scores": B'}
+    
+    # import distinctipy
+
+    # def save_masks(self,
+    #                image: np.ndarray,
+    #                detections: Dict[str, Any],
+    #                out_dir: str,
+    #                base_name: str,
+    #                save_overlay: bool = True) -> Dict[str, Any]:
+    #     """Save instance masks (and optional overlay) to disk.
+
+    #     Args:
+    #         image: The original RGB image [H, W, 3].
+    #         detections: Output dict from generate_masks.
+    #         out_dir: Directory to save files into.
+    #         base_name: Base filename (without extension) for saved artifacts.
+    #         save_overlay: If True, also save a color overlay PNG.
+
+    #     Returns:
+    #         Dict containing lists of saved file paths.
+    #     """
+    #     os.makedirs(out_dir, exist_ok=True)
+
+    #     masks = detections["masks"].detach().cpu()
+    #     boxes = detections["boxes"].detach().cpu()
+
+    #     H, W = masks.shape[-2], masks.shape[-1]
+
+    #     saved_mask_paths: List[str] = []
+
+    #     # Save each mask as a binary PNG (0/255)
+    #     for i, m in enumerate(masks):
+    #         m_np = (m.numpy() > 0.5).astype(np.uint8) * 255
+    #         mask_path = osp.join(out_dir, f"{base_name}_mask_{i:02d}.png")
+    #         cv2.imwrite(mask_path, m_np)
+    #         saved_mask_paths.append(mask_path)
+
+    #     # Save boxes as .npy for convenience
+    #     boxes_path = osp.join(out_dir, f"{base_name}_boxes.npy")
+    #     np.save(boxes_path, boxes.numpy())
+
+    #     overlay_path = None
+    #     if save_overlay:
+    #         # Create a colored overlay similar to the demo visualization
+    #         overlay = image.copy()
+    #         colors = distinctipy.get_colors(len(masks)) if len(masks) > 0 else []
+    #         alpha = 0.33
+    #         for idx, m in enumerate(masks):
+    #             m_bool = (m.numpy() > 0.5)
+    #             if not np.any(m_bool):
+    #                 continue
+    #             r = int(255 * colors[idx][0])
+    #             g = int(255 * colors[idx][1])
+    #             b = int(255 * colors[idx][2])
+    #             overlay[m_bool, 0] = alpha * r + (1 - alpha) * overlay[m_bool, 0]
+    #             overlay[m_bool, 1] = alpha * g + (1 - alpha) * overlay[m_bool, 1]
+    #             overlay[m_bool, 2] = alpha * b + (1 - alpha) * overlay[m_bool, 2]
+
+    #         overlay_path = osp.join(out_dir, f"{base_name}_overlay.png")
+    #         cv2.imwrite(overlay_path, cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+
+    #     return {
+    #         "masks": saved_mask_paths,
+    #         "boxes": boxes_path,
+    #         "overlay": overlay_path,
+    #     }
