@@ -1,3 +1,29 @@
+"""GroundedSAM utilities: prompt-driven detection + segmentation.
+
+This module integrates GroundingDINO for text-prompted object detection and
+Segment Anything (SAM/MobileSAM/YOLO-SAM) for mask generation. It provides
+simple classes to:
+
+- Download and load GroundingDINO checkpoints from Hugging Face.
+- Run detection from a natural language caption to get bounding boxes.
+- Use SAM-family predictors to obtain segmentation masks for those boxes.
+
+Typical flow
+-----------
+1) GroundingDINO detects boxes from a prompt (e.g., "red box").
+2) A SAM predictor refines those boxes into pixel-accurate masks.
+
+Expected checkpoints layout under ``checkpoint_dir``
+---------------------------------------------------
+- GroundingDINO weights are downloaded automatically into ``checkpoint_dir/gdino``.
+- SAM-family weights are expected in:
+    - MobileSAM: ``checkpoint_dir/mobilesam/mobile_sam.pt``
+    - SAM ViT-B/L/H: ``checkpoint_dir/sam/sam_vit_{b|l|h}_*.pth``
+    - YOLO-SAM: ``checkpoint_dir/yolosam/<sam_variant>.pt``
+
+All images are assumed to be numpy RGB arrays with shape [H, W, 3].
+"""
+
 import os
 import os.path as osp
 import logging
@@ -24,7 +50,7 @@ from typing_extensions import Optional, List, Dict, Any, Union, Tuple
 
 class GroundingDINO:
     """
-    Implements object detection using HuggingFace GroundingDINO
+    Text-prompted object detection powered by GroundingDINO.
 
     Based on: https://github.com/IDEA-Research/GroundingDINO
     """
@@ -36,6 +62,17 @@ class GroundingDINO:
                  box_threshold: float = 0.1,
                  text_threshold: float = 0.1,
                  device: Optional[str] = "cpu") -> None:
+        """Create a GroundingDINO detector.
+
+        Args:
+            checkpoint_dir: Directory to cache/download model checkpoints.
+            config_dir: Directory containing GroundingDINO config files
+                (e.g., ``cfg/gdino`` in this repo).
+            use_vitb: If True, use Swin-B config/weights; otherwise Swin-T OGC.
+            box_threshold: Minimum box confidence threshold.
+            text_threshold: Minimum text matching threshold.
+            device: Torch device string ("cuda"/"cpu"). If None, auto-detect.
+        """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -75,13 +112,15 @@ class GroundingDINO:
     def load_model(model_config_path: str,
                    checkpoint_file_path: str,
                    device: str) -> torch.nn.Module:
-        """
+        """Load a GroundingDINO model and weights.
 
-        :param str model_config_path: Path to model configuration file.
-        :param str checkpoint_file_path: Path to checkpoint file.
-        :param str device: device type (e.g. "cuda" or "cpu").
-        :return: Loaded model.
-        :rtype: torch.nn.Module
+        Args:
+            model_config_path: Path to model configuration file.
+            checkpoint_file_path: Path to checkpoint file.
+            device: Device type (e.g. "cuda" or "cpu").
+
+        Returns:
+            torch.nn.Module: Ready-to-infer GroundingDINO model.
         """
         # create model
         args = gdino_SLConfig.fromfile(model_config_path)
@@ -99,12 +138,18 @@ class GroundingDINO:
         return model
 
     def predict(self, image: np.ndarray, caption: str = "objects") -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
-        """Get predictions for a given image using GroundingDINO model.
+        """Run text-prompted detection on an image.
 
-        :param np.ndarray image: The input image [H, W, 3] as a numpy RGB array.
-        :param str caption: text prompt for object detection
-        :return: A tuple conatining the bounding boxes [B, 4] in xyxy; a list of confidences and a list of matching phrase for each bounding box.
-        :rtype: Tuple[torch.Tensor, torch.Tensor, List[str]]
+        Args:
+            image: RGB image as numpy array [H, W, 3].
+            caption: Text prompt for object detection (e.g., "red box").
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, List[str]]: A tuple
+            (bboxes_xyxy, confidences, phrases) where:
+              - bboxes_xyxy: [B, 4] boxes in xyxy (float, image scale)
+              - confidences: [B] box confidence scores
+              - phrases: list[str] matched phrases per box
         """
         # prepare image
         processed_image, _ = self.transform(Image.fromarray(image.astype(np.uint8)), None)  # 3 x H' x W'
@@ -131,7 +176,7 @@ class GroundingDINO:
 
 class SAMPredictor:
     """
-    Segmenting objects using the Segment Anything model with boundbox prompts.
+    Segment objects using the Segment Anything family with bounding-box prompts.
 
     """
 
@@ -141,8 +186,15 @@ class SAMPredictor:
                  mask_threshold: float = 0.1,
                  device: Optional[str] = "cpu",
                  chunk_size: int = 8) -> None:
-        """
-        Initialize the SegmentAnythingPredictor object.
+        """Initialize a SAM/MobileSAM predictor.
+
+        Args:
+            checkpoint_dir: Root directory containing SAM-family checkpoints.
+            vit_model: One of {"vit_t", "vit_b", "vit_l", "vit_h"}. "vit_t"
+                uses MobileSAM.
+            mask_threshold: Minimum mask confidence to keep (None keeps all).
+            device: Torch device string ("cuda"/"cpu"). If None, auto-detect.
+            chunk_size: Batch size for box prompting (controls memory/speed).
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -184,15 +236,19 @@ class SAMPredictor:
         return self
 
     @torch.no_grad()
-    def predict(self, image: np.ndarray, prompt_bboxes: Union[np.ndarray, torch.Tensor]) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor]:
+    def predict(self, image: np.ndarray, prompt_bboxes: Union[np.ndarray, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Predict segmentation masks for the input image.
 
-        :param np.ndarray image: The input image [H, W, 3] as a numpy RGB array.
-        :param Union[np.ndarray, torch.Tensor] prompt_bboxes: Bounding boxes in xyxy
-        :return: A tuple containing the segmentation masks [B, H, W], there confidences and all indices of the bounding boxes, who got a mask.
-        :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-        :raises ValueError: If the input image is not a numpy array.
+        Args:
+            image: RGB image [H, W, 3] as numpy array.
+            prompt_bboxes: Bounding boxes in xyxy (numpy or torch tensor).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+              - masks: [B', H, W] boolean/float masks
+              - confidences: [B'] mask confidences
+              - indices: [B'] indices into the original input boxes kept after
+                thresholding
         """
         input_boxes = torch.as_tensor(prompt_bboxes, device=self.predictor.device)  # B x 4 (as xyxy)
         transformed_boxes = self.predictor.transform.apply_boxes_torch(input_boxes, image.shape[:2])  # B x 4
@@ -234,7 +290,7 @@ class SAMPredictor:
 
 class YOLOSAMPredictor:
     """
-    Segmenting objects using the Segment Anything model with boundbox prompts.
+    Segment objects using the YOLO-SAM predictor with bounding-box prompts.
 
     """
 
@@ -244,8 +300,15 @@ class YOLOSAMPredictor:
                  mask_threshold: float = 0.1,
                  device: Optional[str] = "cpu",
                  chunk_size: int = 8) -> None:
-        """
-        Initialize the SAMPredictor object.
+        """Initialize a YOLO-SAM predictor.
+
+        Args:
+            checkpoint_dir: Root directory containing YOLO-SAM checkpoints.
+            vit_model: YOLO-SAM checkpoint name (e.g., "sam_b.pt"). The
+                extension ".pt" is optional.
+            mask_threshold: Minimum mask confidence to keep (None keeps all).
+            device: Torch device string ("cuda"/"cpu"). If None, auto-detect.
+            chunk_size: Batch size for box prompting (controls memory/speed).
         """
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -265,10 +328,16 @@ class YOLOSAMPredictor:
         checkpoint_path = osp.join(checkpoint_dir, "yolosam", vit_model)
         os.makedirs(osp.dirname(checkpoint_path), exist_ok=True)
 
-        overrides = {"conf": 1.0,  # filter later manuel
-                     "task": "segment", "mode": "predict", "imgsz": 1024,
-                     "model": checkpoint_path, "device": device,
-                     "verbose": False, "save": False}
+        overrides = {
+            "conf": 1.0,  # filter later manually
+            "task": "segment",
+            "mode": "predict",
+            "imgsz": 1024,
+            "model": checkpoint_path,
+            "device": device,
+            "verbose": False,
+            "save": False,
+        }
         self.predictor = SAMPredictor(overrides=overrides)
 
         self.mask_threshold = mask_threshold
@@ -287,11 +356,16 @@ class YOLOSAMPredictor:
     def predict(self, image: np.ndarray, prompt_bboxes: Union[np.ndarray, torch.Tensor]):
         """Predict segmentation masks for the input image.
 
-        :param np.ndarray image: The input image [H, W, 3] as a numpy RGB array.
-        :param Union[np.ndarray, torch.Tensor] prompt_bboxes: Bounding boxes in xyxy
-        :return: A tuple containing the segmentation masks [B, H, W], there confidences and all indices of the bounding boxes, who got a mask.
-        :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-        :raises ValueError: If the input image is not a numpy array.
+        Args:
+            image: RGB image [H, W, 3] as numpy array.
+            prompt_bboxes: Bounding boxes in xyxy (numpy or torch tensor).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+              - masks: [B', H, W] boolean/float masks
+              - confidences: [B'] mask confidences
+              - indices: [B'] indices into the original input boxes kept after
+                thresholding
         """
         if torch.is_tensor(prompt_bboxes):
             prompt_bboxes = prompt_bboxes.detach().cpu().numpy()
@@ -327,6 +401,12 @@ class YOLOSAMPredictor:
 
 
 class GroundedSAM:
+    """High-level wrapper combining GroundingDINO and a SAM-family predictor.
+
+    Use ``generate_masks`` to obtain boxes, masks, and confidence scores from a
+    single RGB image given a prompt.
+    """
+
     def __init__(self,
                  ground_dino: GroundingDINO,
                  sam_predictor: SAMPredictor,
@@ -349,7 +429,27 @@ class GroundedSAM:
                                 mask_threshold: float = 0.01,
                                 prompt_text: str = "objects",
                                 segmentor_width_size: Optional[int] = None,
-                                device: Optional[str] = "cpu") -> "GroundedSam":
+                                device: Optional[str] = "cpu") -> "GroundedSAM":
+        """Factory to build a ready-to-use GroundedSAM instance.
+
+        Args:
+            checkpoints_dir: Root directory holding all checkpoints.
+            grounded_dino_config_dir: Directory with GroundingDINO config files.
+            grounded_dino_use_vitb: Use the Swin-B variant of GroundingDINO.
+            box_threshold: GroundingDINO box confidence threshold.
+            text_threshold: GroundingDINO text threshold.
+            use_yolo_sam: If True, use YOLO-SAM; else SAM/MobileSAM.
+            sam_vit_model: For SAM-family. One of {"vit_t", "vit_b", "vit_l",
+                "vit_h"} for SAM/MobileSAM, or YOLO-SAM .pt filename.
+            mask_threshold: Minimum mask confidence to keep (None keeps all).
+            prompt_text: Default text prompt.
+            segmentor_width_size: Optional width to resize before segmentation
+                for speed (keeps aspect ratio). Set None to disable.
+            device: Torch device string.
+
+        Returns:
+            GroundedSAM: Configured model wrapper.
+        """
         ground_dino = GroundingDINO(checkpoint_dir=checkpoints_dir,
                                     config_dir=grounded_dino_config_dir,
                                     use_vitb=grounded_dino_use_vitb,
@@ -378,6 +478,7 @@ class GroundedSAM:
         return self
 
     def preprocess_resize(self, image: np.ndarray):
+        """Resize image to ``segmentor_width_size`` while keeping aspect ratio."""
         orig_size = image.shape[:2]
         height_size = int(self.segmentor_width_size * orig_size[0] / orig_size[1])
         resized_image = cv2.resize(image.copy(),
@@ -385,6 +486,7 @@ class GroundedSAM:
         return resized_image
 
     def postprocess_resize(self, detections, orig_size):
+        """Upscale masks/boxes back to the original image size after inference."""
         detections["masks"] = F.interpolate(detections["masks"].unsqueeze(1).float(),
                                             size=(orig_size[0], orig_size[1]),
                                             mode="bilinear",
@@ -399,9 +501,19 @@ class GroundedSAM:
         return detections
 
     @torch.no_grad()
-    def generate_masks(self, image: np.ndarray) -> List[Dict[str, Any]]:
-        """
-        :param np.ndarray image: [H, W, 3] RGB
+    def generate_masks(self, image: np.ndarray) -> Optional[Dict[str, Any]]:
+        """Generate detection boxes and segmentation masks for an image.
+
+        Args:
+            image: RGB image [H, W, 3].
+
+        Returns:
+            Optional[Dict[str, Any]]: A dictionary with keys:
+              - "boxes": [B', 4] xyxy boxes (torch.Tensor)
+              - "boxes_scores": [B'] box confidence scores (torch.Tensor)
+              - "masks": [B', H, W] masks (torch.Tensor)
+              - "masks_scores": [B'] mask confidence scores (torch.Tensor)
+            or None if no detections were found.
         """
         if self.segmentor_width_size:
             orig_size = image.shape[:2]  # 2
@@ -427,69 +539,3 @@ class GroundedSAM:
             detections = self.postprocess_resize(detections, orig_size)  # {..., "masks": B' x H x W, ...}
 
         return detections  # {"boxes": B' x 4 (as xyxy), "masks": B' x H x W, "boxes_scores": B', "masks_scores": B'}
-    
-    # import distinctipy
-
-    # def save_masks(self,
-    #                image: np.ndarray,
-    #                detections: Dict[str, Any],
-    #                out_dir: str,
-    #                base_name: str,
-    #                save_overlay: bool = True) -> Dict[str, Any]:
-    #     """Save instance masks (and optional overlay) to disk.
-
-    #     Args:
-    #         image: The original RGB image [H, W, 3].
-    #         detections: Output dict from generate_masks.
-    #         out_dir: Directory to save files into.
-    #         base_name: Base filename (without extension) for saved artifacts.
-    #         save_overlay: If True, also save a color overlay PNG.
-
-    #     Returns:
-    #         Dict containing lists of saved file paths.
-    #     """
-    #     os.makedirs(out_dir, exist_ok=True)
-
-    #     masks = detections["masks"].detach().cpu()
-    #     boxes = detections["boxes"].detach().cpu()
-
-    #     H, W = masks.shape[-2], masks.shape[-1]
-
-    #     saved_mask_paths: List[str] = []
-
-    #     # Save each mask as a binary PNG (0/255)
-    #     for i, m in enumerate(masks):
-    #         m_np = (m.numpy() > 0.5).astype(np.uint8) * 255
-    #         mask_path = osp.join(out_dir, f"{base_name}_mask_{i:02d}.png")
-    #         cv2.imwrite(mask_path, m_np)
-    #         saved_mask_paths.append(mask_path)
-
-    #     # Save boxes as .npy for convenience
-    #     boxes_path = osp.join(out_dir, f"{base_name}_boxes.npy")
-    #     np.save(boxes_path, boxes.numpy())
-
-    #     overlay_path = None
-    #     if save_overlay:
-    #         # Create a colored overlay similar to the demo visualization
-    #         overlay = image.copy()
-    #         colors = distinctipy.get_colors(len(masks)) if len(masks) > 0 else []
-    #         alpha = 0.33
-    #         for idx, m in enumerate(masks):
-    #             m_bool = (m.numpy() > 0.5)
-    #             if not np.any(m_bool):
-    #                 continue
-    #             r = int(255 * colors[idx][0])
-    #             g = int(255 * colors[idx][1])
-    #             b = int(255 * colors[idx][2])
-    #             overlay[m_bool, 0] = alpha * r + (1 - alpha) * overlay[m_bool, 0]
-    #             overlay[m_bool, 1] = alpha * g + (1 - alpha) * overlay[m_bool, 1]
-    #             overlay[m_bool, 2] = alpha * b + (1 - alpha) * overlay[m_bool, 2]
-
-    #         overlay_path = osp.join(out_dir, f"{base_name}_overlay.png")
-    #         cv2.imwrite(overlay_path, cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
-
-    #     return {
-    #         "masks": saved_mask_paths,
-    #         "boxes": boxes_path,
-    #         "overlay": overlay_path,
-    #     }
