@@ -39,4 +39,4 @@ dist/
 assets/
 demo_data/
 weights/
-debug/
+debug/GroundedSAM_demo/checkpoints/
