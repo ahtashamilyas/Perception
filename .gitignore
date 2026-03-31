@@ -1,51 +1,30 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-.history
-exp/
 *.py[cod]
 *$py.class
-# C extensions
+*.so
+
+# C extensions & build
 *.so
 BundleTrack/build
+mycpp/
+
 # Distribution / packaging
 .Python
 foundationpose/
 build/
 develop-eggs/
-*.zip
-demo_data/*
 dist/
-# *.png
-# *.jpg
-debug/
-weights/*
-downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-.vscode/
-wheels/
-wandb/
-*.blend1
-*.tar.*
-*.zip
-*.svg
-sacred/
-artifacts/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+pip-wheel-metadata/
+share/python-wheels/
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -61,34 +40,27 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
-demo_data/
-debug/
 coverage.xml
 *.cover
-demo_data/
-debug/
-weights/
 *.py,cover
 .hypothesis/
 .pytest_cache/
 *.pth
-weights/
+
 # Translations
 *.mo
 *.pot
 
-# Django stuff:
+# Django/Flask/Framework stuff
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-
-# Flask stuff:
 instance/
 .webassets-cache
 cosypose/experiments
 
-# Scrapy stuff:
+# Scrapy stuff
 .scrapy
 
 # Sphinx documentation
@@ -99,6 +71,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+.history
 
 # IPython
 profile_default/
@@ -107,14 +80,7 @@ ipython_config.py
 # pyenv
 .python-version
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+# PEP 582
 __pypackages__/
 
 # Celery stuff
@@ -124,14 +90,20 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Python virtual environments (local)
 .env
 .venv
 env/
 venv/
+venv3.9/
+venv3.12/
 ENV/
 env.bak/
 venv.bak/
+3DEnv/
+3Dtest/
+torch3denv/
+torch-2.2.1+cu121.dist-info/
 
 # Spyder project settings
 .spyderproject
@@ -151,8 +123,34 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Datasets
+# IDEs
+.vscode/
+
+# ROS2 / colcon generated output
+ros2_ws/
+ros2_integration/
+rosbag_testing/
+install/
+log/
+
+# Datasets & models
 data/
 logs/
+weights/
+demo_data/
+debug/
+downloads/
+artifacts/
+sacred/
+wandb/
 !BundleTrack/XMem/inference/data
 run_used.yml
+
+# Runtime & temporary
+tmp/
+runs/
+exp/
+*.blend1
+*.tar.*
+*.zip
+*.svg
