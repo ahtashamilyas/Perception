@@ -1,0 +1,3 @@
+python3 -m integration -i "demo_data/YCB_Video/test/000048/rgb" --depth_path "demo_data/YCB_Video/test/000048/depth" -m 0.3 -n 0.3 -y -s "mobile_sam.pt" -q 0.01 -p "red mug" -b "gray" --mesh_path "demo_data/YCB_Video/models" --mesh_obj_id 14
+
+python3 -m integration -i "demo_data/mustard0/rgb" --depth_path "demo_data/mustard0/depth" -m 0.3 -n 0.3 -y -s "mobile_sam.pt" -q 0.01 -p "yellow object" -b "gray" --mesh_path "demo_data/YCB_Video/models" --mesh_obj_id 5

@@ -127,9 +127,9 @@ dmypy.json
 .vscode/
 
 # ROS2 / colcon generated output
+rosbag_testing/output
+rosbag_testing/rosbag_output
 ros2_ws/
-ros2_integration/
-rosbag_testing/
 install/
 log/
 
@@ -153,4 +153,5 @@ exp/
 *.blend1
 *.tar.*
 *.zip
-*.svg
+*.svg*.pt
+*.pt

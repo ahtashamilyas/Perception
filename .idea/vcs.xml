@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/acrambly_interfaces" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/build/librealsense2/third-party/json" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/build/librealsense2/third-party/libcurl" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/src/librealsense" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/src/librealsense/build/third-party/json" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ros2_ws/src/librealsense/build/third-party/libcurl" vcs="Git" />
+  </component>
+</project>
